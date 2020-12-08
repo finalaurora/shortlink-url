@@ -1,0 +1,115 @@
+image: maven:3.6.0-jdk-8
+
+cache:
+  paths:
+    - .m2/
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2 -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  MAVEN_CLI_OPTS: "-Dmode=ci --batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+  mode: "ci"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_DRIVER: overlay2
+
+stages:
+  - build
+  - test
+#  - deploy_doc
+#  - docker
+#  - deploy
+
+maven:build:
+  stage: build
+  environment: development
+
+  script:
+    - "mvn $MAVEN_CLI_OPTS clean compile"
+
+maven:package:
+  services:
+    - docker:18-dind
+  stage: test
+  environment: development
+  dependencies:
+    - maven:build
+  before_script:
+  script: "mvn $MAVEN_CLI_OPTS package -DskipTests"
+  after_script:
+    - du -sh dist
+  artifacts:
+    paths:
+      - dist
+
+# Deploy document page
+#pages:
+#  stage: deploy_doc
+#  script:
+#    - mkdir .public
+#    - cp -r apidoc/src/* .public
+#    - mv .public public
+#  artifacts:
+#    paths:
+#      - public
+#  only:
+#    - master
+
+#docker-staging:
+#  stage: docker
+#  image: docker:18-git
+#  only:
+#    - master
+#  except:
+#    - tags
+#  services:
+#    - docker:18-dind
+#
+#  script:
+#    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN registry.rever.vn
+#    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME .
+#    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
+
+#docker-production:
+#  stage: docker
+#  image: docker:18-git
+#  only:
+#    - tags
+#  services:
+#    - docker:18-dind
+#  script:
+#    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN registry.rever.vn
+#    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG .
+#    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+#    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG $CI_REGISTRY_IMAGE:latest
+#    - docker push $CI_REGISTRY_IMAGE:latest
+
+#deploy-staging:
+#  image: r3v3r/k8s-deploy:latest
+#  stage: deploy
+#  only:
+#    - master
+#  script:
+#    - mkdir -p $HOME/.kube/
+#    - echo -n $KUBE_CONFIG | base64 -d > $HOME/.kube/config
+#    - kubectl config view
+#    - kubectl cluster-info
+#    - kubectl apply -f deploy/k8s/deployment.yml
+#    - kubectl apply -f deploy/k8s/service.yml
+#    - kubectl rollout restart -f deploy/k8s/deployment.yml
+#    - notify_success || true
+#
+#deploy-staging-v2:
+#  image: r3v3r/k8s-deploy:latest
+#  stage: deploy
+#  only:
+#    - master
+#  tags:
+#    - runner-deploy
+#  script:
+#    - mkdir -p $HOME/.kube/
+#    - echo -n $KUBE_CONFIG_V2 | base64 -d > $HOME/.kube/config
+#    - kubectl config view
+#    - kubectl cluster-info
+#    - kubectl apply -f deploy/k8s/deployment_v2.yml
+#    - kubectl apply -f deploy/k8s/service.yml
+#    - kubectl rollout restart -f deploy/k8s/deployment_v2.yml
+#    - notify_success || true
